@@ -39,6 +39,10 @@ int main(int argc, char *argv[])
 	}
 
 	fp = strcmp(argv[optind], "-")? gzopen(argv[optind], "r") : gzdopen(fileno(stdin), "r");
+	if (fp == 0) {
+		fprintf(stderr, "[E::%s] failed to open file '%s'. Abort.\n", __func__, argv[optind]);
+		return 2;
+	}
 	ks = ks_init(fp);
 
 	// read the matrix into C
