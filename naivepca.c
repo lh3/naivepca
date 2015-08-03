@@ -80,6 +80,7 @@ int main(int argc, char *argv[])
 		}
 		n_tot += n_cols;
 	}
+	free(str.s);
 	fprintf(stderr, "[M::%s] read %d samples and %d sites; ploidy is %d\n", __func__, n_rows, n_cols, max_hap);
 	fprintf(stderr, "[M::%s] %.3f%% of genotypes are missing\n", __func__, (double)n_missing / n_tot);
 
@@ -145,11 +146,11 @@ int main(int argc, char *argv[])
 		for (i = 0; i < n_rows; ++i) {
 			printf("%s", names[i]);
 			for (j = 0; j < n_rows; ++j)
-				printf("\t%.6f", X[i*n_rows + evsrt[j].i]);
+				printf("\t%.6f", X[i*n_rows + evsrt[j].i] * evsrt[j].ev);
 			putchar('\n');
 			free(names[i]);
 		}
-		free(ev);
+		free(ev); free(evsrt);
 		free(X); free(names);
 	}
 	
