@@ -21,22 +21,24 @@ int n_eigen_symm(double *_a, int n, double *eval);
 
 int main(int argc, char *argv[])
 {
-	int c, dret, lineno = 0, n_rows = 0, m_rows = 0, n_cols = 0;
+	int c, dret, lineno = 0, n_rows = 0, m_rows = 0, n_cols = 0, max_hap = 0;
+	int64_t n_missing = 0, n_tot = 0;
 	gzFile fp;
 	kstream_t *ks;
 	kstring_t str = {0,0,0};
 	int8_t **C = 0;
-	double **M, *X;
+	double **M, *X, min_maf = 0.0;
 	char **names = 0;
 
-	while ((c = getopt(argc, argv, "")) >= 0) {
+	while ((c = getopt(argc, argv, "m:")) >= 0) {
+		if (c == 'm') min_maf = atof(optarg);
 	}
 	if (argc - optind == 0) {
-		fprintf(stderr, "Usage: naivepca <in.txt>\n");
+		fprintf(stderr, "Usage: naivepca [-m min_maf] <in.txt>\n");
 		return 1;
 	}
 
-	fp = gzopen(argv[optind], "r");
+	fp = strcmp(argv[optind], "-")? gzopen(argv[optind], "r") : gzdopen(fileno(stdin), "r");
 	ks = ks_init(fp);
 
 	// read the matrix into C
@@ -51,12 +53,12 @@ int main(int argc, char *argv[])
 			for (; *p && (*p == '\t' || *p == ' '); ++p);
 		}
 		if (*p == 0) {
-			fprintf(stderr, "WARNING: line %d has one field; skipped.\n", lineno);
+			fprintf(stderr, "[W::%s] line %d has one field; skipped.\n", __func__, lineno);
 			continue;
 		}
 		if (n_cols != 0) {
 			if (n_cols != str.s + str.l - p) {
-				fprintf(stderr, "WARNING: line %d has a different number of columns; skipped.\n", lineno);
+				fprintf(stderr, "[W::%s] line %d has a different number of columns; skipped.\n", __func__, lineno);
 				continue;
 			}
 		} else n_cols = str.s + str.l - p;
@@ -69,33 +71,43 @@ int main(int argc, char *argv[])
 		q = C[n_rows++] = (int8_t*)calloc(n_cols, sizeof(double));
 		for (i = 0; i < n_cols; ++i) {
 			if (p[i] >= '0' && p[i] <= '9') q[i] = p[i] - '0';
-			else q[i] = -1;
+			else q[i] = -1, ++n_missing;
+			max_hap = max_hap > q[i]? max_hap : q[i];
 		}
+		n_tot += n_cols;
 	}
-	fprintf(stderr, "MESSAGE: read %d samples and %d sites\n", n_rows, n_cols);
+	fprintf(stderr, "[M::%s] read %d samples and %d sites; ploidy is %d\n", __func__, n_rows, n_cols, max_hap);
+	fprintf(stderr, "[M::%s] %.3f%% of genotypes are missing\n", __func__, (double)n_missing / n_tot);
 
 	{ // normalize the matrix into M
-		int i, j, *sum, *cnt;
-		double *mu;
+		int i, j, *sum, *cnt, n_dropped = 0;
+		double *mu, *pp;
 		sum = (int*)calloc(n_cols, sizeof(int));
 		cnt = (int*)calloc(n_cols, sizeof(int));
 		mu = (double*)calloc(n_cols, sizeof(double));
+		pp = (double*)calloc(n_cols, sizeof(double));
 		for (i = 0; i < n_rows; ++i) {
 			int8_t *q = C[i];
 			for (j = 0; j < n_cols; ++j)
 				if (q[j] >= 0) sum[j] += q[j], ++cnt[j];
 		}
-		for (j = 0; j < n_cols; ++j)
-			if (cnt[j] > 0) mu[j] = (double)sum[j] / cnt[j];
+		for (j = 0; j < n_cols; ++j) {
+			if (cnt[j] > 0) {
+				mu[j] = (double)sum[j] / cnt[j];
+				pp[j] = mu[j] / max_hap;
+				if (pp[j] < min_maf || 1. - pp[j] < min_maf) ++n_dropped;
+			} else ++n_dropped;
+		}
+		fprintf(stderr, "[M::%s] %d rare sites are dropped\n", __func__, n_dropped);
 		M = (double**)calloc(n_rows, sizeof(double*));
 		for (i = 0; i < n_rows; ++i) {
 			int8_t *q = C[i];
 			double *r;
 			r = M[i] = (double*)calloc(n_cols, sizeof(double));
 			for (j = 0; j < n_cols; ++j)
-				r[j] = q[j] < 0? 0. : (q[j] - mu[j]) / sqrt(.5 * mu[j] * (1. - .5 * mu[j]));
+				r[j] = q[j] < 0 || pp[j] < min_maf || 1. - pp[j] < min_maf? 0. : (q[j] - mu[j]) / sqrt(pp[j] * (1. - pp[j]));
 		}
-		free(sum); free(cnt); free(mu);
+		free(sum); free(cnt); free(mu); free(pp);
 		for (i = 0; i < n_rows; ++i) free(C[i]);
 		free(C);
 	}
