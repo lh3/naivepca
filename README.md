@@ -12,7 +12,7 @@ X_{ij} = \sum_{k=1}^n M_{ik} M_{jk} / n
 ```
 and finds the eigenvectors of matrix (*X*<sub>*ij*</sub>). Notably, if
 *G*<sub>*ij*</sub> is missing data, *M*<sub>*ij*</sub> takes zero and the
-computation of the *&#956;*<sub>*j*</sub> needs to be adjusted as well.
+computation of *&#956;*<sub>*j*</sub> needs to be adjusted as well.
 
 The input of NaivePCA looks like:
 ```
