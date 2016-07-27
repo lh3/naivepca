@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <xmmintrin.h>
 #include "ksort.h"
 #include "kseq.h"
 KSTREAM_INIT(gzFile, gzread, 0x10000)
@@ -30,6 +31,8 @@ int main(int argc, char *argv[])
 	double **M, *X, min_maf = 0.0;
 	char **names = 0;
 
+//	_MM_SET_EXCEPTION_MASK(_MM_GET_EXCEPTION_MASK() & ~(_MM_MASK_INVALID | _MM_MASK_OVERFLOW | _MM_MASK_UNDERFLOW | _MM_MASK_DIV_ZERO));
+	_MM_SET_EXCEPTION_MASK(_MM_GET_EXCEPTION_MASK() & ~(_MM_MASK_INVALID | _MM_MASK_DIV_ZERO));
 	while ((c = getopt(argc, argv, "m:")) >= 0) {
 		if (c == 'm') min_maf = atof(optarg);
 	}
@@ -110,7 +113,7 @@ int main(int argc, char *argv[])
 			double *r;
 			r = M[i] = (double*)calloc(n_cols, sizeof(double));
 			for (j = 0; j < n_cols; ++j)
-				r[j] = q[j] < 0 || pp[j] < min_maf || 1. - pp[j] < min_maf? 0. : (q[j] - mu[j]) / sqrt(pp[j] * (1. - pp[j]));
+				r[j] = q[j] < 0 || pp[j] < min_maf || 1. - pp[j] < min_maf || pp[j] == 0. || 1 - pp[j] == 0. ? 0. : (q[j] - mu[j]) / sqrt(pp[j] * (1. - pp[j]));
 		}
 		free(sum); free(cnt); free(mu); free(pp);
 		for (i = 0; i < n_rows; ++i) free(C[i]);
